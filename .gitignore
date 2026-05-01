@@ -1,0 +1,11 @@
+# Ignore the big video files
+*.mp4
+*.mov
+*.avi
+
+# Ignore your Documents/data folders
+data/
+processed/
+
+# Ignore Mac system junk
+.DS_Store
