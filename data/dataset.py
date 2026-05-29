@@ -22,7 +22,8 @@ class FeatureDataset(Dataset):
         item = self.samples[idx]
         features = torch.load(item["features"])
         labels = torch.load(item["labels"])
-        return features, labels
+        T = min(features.shape[0], labels.shape[0])
+        return features[:T], labels[:T]
 
 
 def collate_variable_length(batch):
