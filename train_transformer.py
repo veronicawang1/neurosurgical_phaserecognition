@@ -9,37 +9,42 @@ from data.splits import build_samples, train_val_split
 from models.opera_transformer import NeuroOperA
 
 
+def _acc(logits, labels):
+    flat_logits = logits.reshape(-1, logits.shape[-1])
+    flat_labels = labels.reshape(-1)
+    mask = flat_labels != -100
+    correct = (flat_logits[mask].argmax(1) == flat_labels[mask]).sum().item()
+    return correct, mask.sum().item()
+
+
 def train_one_epoch(model, loader, optimizer, device, class_weights=None):
     model.train()
-    total_loss = 0
-
+    total_loss, correct, total = 0, 0, 0
     for features, labels, padding_mask in loader:
         features = features.to(device)
         labels = labels.to(device)
         padding_mask = padding_mask.to(device)
-
         logits, attn = model(features, padding_mask)
-
         loss = F.cross_entropy(
             logits.reshape(-1, logits.shape[-1]),
             labels.reshape(-1),
             weight=class_weights,
             ignore_index=-100,
         )
-
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-
         total_loss += loss.item()
-
-    return total_loss / len(loader)
+        c, n = _acc(logits, labels)
+        correct += c
+        total += n
+    return total_loss / len(loader), correct / total
 
 
 @torch.no_grad()
 def eval_one_epoch(model, loader, device):
     model.eval()
-    total_loss = 0
+    total_loss, correct, total = 0, 0, 0
     for features, labels, padding_mask in loader:
         features = features.to(device)
         labels = labels.to(device)
@@ -51,7 +56,10 @@ def eval_one_epoch(model, loader, device):
             ignore_index=-100,
         )
         total_loss += loss.item()
-    return total_loss / len(loader)
+        c, n = _acc(logits, labels)
+        correct += c
+        total += n
+    return total_loss / len(loader), correct / total
 
 
 def main():
@@ -94,9 +102,9 @@ def main():
     best_val = float("inf")
 
     for epoch in range(1, args.epochs + 1):
-        train_loss = train_one_epoch(model, train_loader, optimizer, device)
-        val_loss = eval_one_epoch(model, val_loader, device)
-        print(f"Epoch {epoch:03d}  train={train_loss:.4f}  val={val_loss:.4f}")
+        train_loss, train_acc = train_one_epoch(model, train_loader, optimizer, device)
+        val_loss, val_acc = eval_one_epoch(model, val_loader, device)
+        print(f"Epoch {epoch:03d}  train loss={train_loss:.4f} acc={train_acc:.3f}  val loss={val_loss:.4f} acc={val_acc:.3f}")
 
         if val_loss < best_val:
             best_val = val_loss
