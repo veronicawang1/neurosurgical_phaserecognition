@@ -9,6 +9,8 @@ OUT_DIR = "data/features"
 
 os.makedirs(OUT_DIR, exist_ok=True)
 
+torch.backends.cudnn.enabled = False
+
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Using device: {device}")
 
