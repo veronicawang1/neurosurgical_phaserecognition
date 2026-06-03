@@ -36,15 +36,17 @@ with torch.no_grad():
         path = os.path.join(VIDEO_DIR, fname)
         cap = cv2.VideoCapture(path)
 
-        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        step = max(1, int(round(fps)))
-        expected = total_frames // step
+        out_name = fname.replace(".mp4", ".pt")
 
         if os.path.exists(os.path.join(OUT_DIR, out_name)):
             print(f"[{vid_idx}/{len(video_files)}] {fname}  skipping (already extracted)")
             cap.release()
             continue
+
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        step = max(1, int(round(fps)))
+        expected = total_frames // step
 
         print(f"[{vid_idx}/{len(video_files)}] {fname}  ({expected} frames to extract)")
 
@@ -70,7 +72,6 @@ with torch.no_grad():
         cap.release()
 
         feats = torch.cat(feats, dim=0)
-        out_name = fname.replace(".mp4", ".pt")
         torch.save(feats, os.path.join(OUT_DIR, out_name))
         print(f"  Done -> {out_name}  shape={feats.shape}\n")
 
