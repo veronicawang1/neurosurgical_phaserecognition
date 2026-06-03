@@ -14,7 +14,7 @@ torch.backends.cudnn.enabled = False
 device = "cuda" if torch.cuda.is_available() else "cpu"
 print(f"Using device: {device}")
 
-model = FrameBackbone(num_classes=5).to(device)
+model = FrameBackbone(num_classes=4).to(device)
 model.eval()
 
 tfm = transforms.Compose([
@@ -40,6 +40,11 @@ with torch.no_grad():
         fps = cap.get(cv2.CAP_PROP_FPS)
         step = max(1, int(round(fps)))
         expected = total_frames // step
+
+        if os.path.exists(os.path.join(OUT_DIR, out_name)):
+            print(f"[{vid_idx}/{len(video_files)}] {fname}  skipping (already extracted)")
+            cap.release()
+            continue
 
         print(f"[{vid_idx}/{len(video_files)}] {fname}  ({expected} frames to extract)")
 
