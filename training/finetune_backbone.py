@@ -1,5 +1,5 @@
 """
-Fine-tunes the ResNet50 backbone directly on raw video frames.
+Fine-tunes the ResNet50 backbone on pre-saved frames (run extract_frames.py first).
 After running this, re-extract features with the fine-tuned checkpoint:
     python3 extract_features.py --checkpoint checkpoints/finetuned_backbone.pt
 """
@@ -14,64 +14,37 @@ from torchvision import transforms
 from models.cnn_backbone import FrameBackbone
 
 
-class VideoFrameDataset(Dataset):
-    def __init__(self, video_dir, labels_dir, transform):
+class FrameImageDataset(Dataset):
+    def __init__(self, frames_dir, transform):
         self.samples = []
         self.transform = transform
-
-        for fname in os.listdir(video_dir):
-            if not fname.endswith(".mp4"):
+        for video_dir in os.listdir(frames_dir):
+            full_dir = os.path.join(frames_dir, video_dir)
+            if not os.path.isdir(full_dir):
                 continue
-            stem = fname.replace(".mp4", "")
-            label_path = os.path.join(labels_dir, stem + ".pt")
-            if not os.path.exists(label_path):
-                continue
-
-            labels = torch.load(label_path)
-            cap = cv2.VideoCapture(os.path.join(video_dir, fname))
-            fps = cap.get(cv2.CAP_PROP_FPS)
-            step = max(1, int(round(fps)))
-
-            i = 0
-            frame_idx = 0
-            success, _ = cap.read()
-            while success:
-                if i % step == 0:
-                    if frame_idx < labels.shape[0] and labels[frame_idx].item() != -100:
-                        self.samples.append((
-                            os.path.join(video_dir, fname),
-                            i,
-                            labels[frame_idx].item(),
-                        ))
-                    frame_idx += 1
-                success, _ = cap.read()
-                i += 1
-            cap.release()
-
-        print(f"  Loaded {len(self.samples)} labeled frames from {video_dir}")
+            for fname in os.listdir(full_dir):
+                if not fname.endswith(".jpg"):
+                    continue
+                label = int(fname.split("_")[-1].replace(".jpg", ""))
+                self.samples.append((os.path.join(full_dir, fname), label))
 
     def __len__(self):
         return len(self.samples)
 
     def __getitem__(self, idx):
-        video_path, frame_num, label = self.samples[idx]
-        cap = cv2.VideoCapture(video_path)
-        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_num)
-        _, frame = cap.read()
-        cap.release()
+        path, label = self.samples[idx]
+        frame = cv2.imread(path)
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         return self.transform(frame), torch.tensor(label, dtype=torch.long)
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--video_dir", default="data/raw_videos")
-    parser.add_argument("--labels_dir", default="data/labels")
+    parser.add_argument("--frames_dir", default="data/frames")
     parser.add_argument("--epochs", type=int, default=10)
     parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--lr", type=float, default=1e-4)
-    parser.add_argument("--lr_backbone", type=float, default=1e-5,
-                        help="Lower LR for backbone layers to avoid forgetting ImageNet knowledge")
+    parser.add_argument("--lr_backbone", type=float, default=1e-5)
     parser.add_argument("--num_classes", type=int, default=4)
     parser.add_argument("--checkpoint_dir", default="checkpoints")
     args = parser.parse_args()
@@ -80,7 +53,7 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Using device: {device}")
 
-    tfm = transforms.Compose([
+    train_tfm = transforms.Compose([
         transforms.ToPILImage(),
         transforms.RandomHorizontalFlip(),
         transforms.ColorJitter(brightness=0.2, contrast=0.2),
@@ -95,12 +68,13 @@ def main():
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
 
-    print("Building dataset (reads frames from video files, takes a moment)...")
-    dataset = VideoFrameDataset(args.video_dir, args.labels_dir, tfm)
+    print("Loading dataset...")
+    full_dataset = FrameImageDataset(args.frames_dir, train_tfm)
+    print(f"Total frames: {len(full_dataset)}")
 
-    n_val = max(1, int(len(dataset) * 0.2))
-    n_train = len(dataset) - n_val
-    train_set, val_set = random_split(dataset, [n_train, n_val],
+    n_val = max(1, int(len(full_dataset) * 0.2))
+    n_train = len(full_dataset) - n_val
+    train_set, val_set = random_split(full_dataset, [n_train, n_val],
                                       generator=torch.Generator().manual_seed(42))
     val_set.dataset.transform = val_tfm
 
@@ -109,8 +83,6 @@ def main():
     print(f"Train: {n_train}  Val: {n_val}")
 
     model = FrameBackbone(num_classes=args.num_classes).to(device)
-
-    # use a lower LR for the backbone, higher for the new classifier head
     optimizer = torch.optim.AdamW([
         {"params": model.features.parameters(), "lr": args.lr_backbone},
         {"params": model.classifier.parameters(), "lr": args.lr},
