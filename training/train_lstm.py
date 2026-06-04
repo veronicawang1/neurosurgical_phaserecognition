@@ -11,7 +11,7 @@ from data.splits import build_samples, train_val_split
 from models.cnn_lstm import CnnLstm
 from utils.class_weights import compute_class_weights
 from utils.logger import RunLogger
-from utils.metrics import edit_distance, segmental_f1
+from utils.metrics import edit_distance, segmental_f1, apply_boundary_mask
 
 
 CLASS_NAMES = [
@@ -95,6 +95,8 @@ def run_epoch(model, loader, optimizer, device, train=True, class_weights=None, 
             per_class.append((c_acc, f1))
         extra["edit_distance"] = round(edit_distance(all_preds, all_gts), 4)
         extra["segmental_f1"] = segmental_f1(all_preds, all_gts)
+        extra["all_preds"] = all_preds
+        extra["all_gts"] = all_gts
     return total_loss / len(loader), acc, per_class, extra
 
 
@@ -112,6 +114,8 @@ def main():
     parser.add_argument("--augment", action="store_true", help="Enable data augmentation")
     parser.add_argument("--log_dir", default="logs")
     parser.add_argument("--run_name", default="lstm")
+    parser.add_argument("--boundary_ignore_secs", type=int, default=5,
+                        help="Ignore frames within this many seconds of phase transitions")
     args = parser.parse_args()
 
     torch.backends.cudnn.enabled = False
@@ -163,16 +167,21 @@ def main():
               f"seg_f1@25={extra['segmental_f1'][0.25]:.3f}  "
               f"seg_f1@50={extra['segmental_f1'][0.5]:.3f}")
         per_class_metrics = {}
+        bp, bg = apply_boundary_mask(extra["all_preds"], extra["all_gts"], args.boundary_ignore_secs)
+        boundary_acc = sum(p == g for p, g in zip(bp, bg)) / len(bp) if bp else 0.0
         for name, (acc, f1) in zip(CLASS_NAMES, per_class):
             acc_str = f"{acc:.3f}" if not math.isnan(acc) else " n/a"
             f1_str  = f"{f1:.3f}"  if not math.isnan(f1)  else " n/a"
             print(f"    {name:<22} acc={acc_str}  f1={f1_str}")
             per_class_metrics[name] = {"acc": None if math.isnan(acc) else round(acc, 4),
                                        "f1": None if math.isnan(f1) else round(f1, 4)}
+        print(f"    boundary_aware_acc={boundary_acc:.3f} (ignoring {args.boundary_ignore_secs}s around transitions)")
         logger.log_epoch(epoch, {"train_loss": round(train_loss, 4), "train_acc": round(train_acc, 4),
                                   "val_loss": round(val_loss, 4), "val_acc": round(val_acc, 4),
                                   "edit_distance": extra["edit_distance"],
                                   "segmental_f1": extra["segmental_f1"],
+                                  "boundary_aware_acc": round(boundary_acc, 4),
+                                  "boundary_ignore_secs": args.boundary_ignore_secs,
                                   "per_class": per_class_metrics})
         if val_loss < best_val:
             best_val = val_loss
