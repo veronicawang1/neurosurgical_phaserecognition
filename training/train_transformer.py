@@ -11,7 +11,7 @@ from data.splits import build_samples, train_val_split
 from models.opera_transformer import NeuroOperA
 from utils.class_weights import compute_class_weights
 from utils.logger import RunLogger
-from utils.metrics import edit_distance, segmental_f1
+from utils.metrics import edit_distance, segmental_f1, apply_boundary_mask
 
 
 CLASS_NAMES = [
@@ -44,7 +44,8 @@ def _per_class_stats(logits, labels, num_classes):
     return tp, fp, fn
 
 
-def train_one_epoch(model, loader, optimizer, device, class_weights=None):
+def train_one_epoch(model, loader, optimizer, device, class_weights=None,
+                    grad_clip=1.0, label_smoothing=0.1):
     model.train()
     total_loss, correct, total = 0, 0, 0
     for features, labels, padding_mask in loader:
@@ -57,9 +58,12 @@ def train_one_epoch(model, loader, optimizer, device, class_weights=None):
             labels.reshape(-1),
             weight=class_weights,
             ignore_index=-100,
+            label_smoothing=label_smoothing,
         )
         optimizer.zero_grad()
         loss.backward()
+        if grad_clip > 0:
+            torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
         optimizer.step()
         total_loss += loss.item()
         c, n = _acc(logits, labels)
@@ -111,6 +115,8 @@ def eval_one_epoch(model, loader, device):
     extra = {
         "edit_distance": round(edit_distance(all_preds, all_gts), 4),
         "segmental_f1": segmental_f1(all_preds, all_gts),
+        "all_preds": all_preds,
+        "all_gts": all_gts,
     }
     return total_loss / len(loader), correct / total, per_class, extra
 
@@ -127,6 +133,10 @@ def main():
     parser.add_argument("--augment", action="store_true", help="Enable data augmentation")
     parser.add_argument("--log_dir", default="logs")
     parser.add_argument("--run_name", default="transformer")
+    parser.add_argument("--boundary_ignore_secs", type=int, default=5)
+    parser.add_argument("--grad_clip", type=float, default=1.0)
+    parser.add_argument("--label_smoothing", type=float, default=0.1)
+    parser.add_argument("--warmup_epochs", type=int, default=5)
     args = parser.parse_args()
 
     torch.backends.cudnn.enabled = False
@@ -159,7 +169,14 @@ def main():
     )
 
     model = NeuroOperA(num_classes=args.num_classes).to(device)
-    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
+    optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=1e-4)
+
+    warmup = torch.optim.lr_scheduler.LinearLR(
+        optimizer, start_factor=0.1, end_factor=1.0, total_iters=args.warmup_epochs)
+    cosine = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, T_max=args.epochs - args.warmup_epochs, eta_min=1e-6)
+    scheduler = torch.optim.lr_scheduler.SequentialLR(
+        optimizer, schedulers=[warmup, cosine], milestones=[args.warmup_epochs])
 
     os.makedirs(args.checkpoint_dir, exist_ok=True)
     best_val = float("inf")
@@ -167,13 +184,21 @@ def main():
 
     for epoch in range(1, args.epochs + 1):
         logger.start_epoch()
-        train_loss, train_acc = train_one_epoch(model, train_loader, optimizer, device, class_weights=class_weights)
+        train_loss, train_acc = train_one_epoch(
+            model, train_loader, optimizer, device,
+            class_weights=class_weights,
+            grad_clip=args.grad_clip,
+            label_smoothing=args.label_smoothing,
+        )
+        scheduler.step()
         val_loss, val_acc, per_class, extra = eval_one_epoch(model, val_loader, device)
         print(f"Epoch {epoch:03d}  train loss={train_loss:.4f} acc={train_acc:.3f}  val loss={val_loss:.4f} acc={val_acc:.3f}")
         print(f"    edit_dist={extra['edit_distance']:.3f}  "
               f"seg_f1@10={extra['segmental_f1'][0.1]:.3f}  "
               f"seg_f1@25={extra['segmental_f1'][0.25]:.3f}  "
               f"seg_f1@50={extra['segmental_f1'][0.5]:.3f}")
+        bp, bg = apply_boundary_mask(extra["all_preds"], extra["all_gts"], args.boundary_ignore_secs)
+        boundary_acc = sum(p == g for p, g in zip(bp, bg)) / len(bp) if bp else 0.0
         per_class_metrics = {}
         for name, (acc, f1) in zip(CLASS_NAMES, per_class):
             acc_str = f"{acc:.3f}" if not math.isnan(acc) else " n/a"
@@ -181,10 +206,13 @@ def main():
             print(f"    {name:<22} acc={acc_str}  f1={f1_str}")
             per_class_metrics[name] = {"acc": None if math.isnan(acc) else round(acc, 4),
                                        "f1": None if math.isnan(f1) else round(f1, 4)}
+        print(f"    boundary_aware_acc={boundary_acc:.3f} (ignoring {args.boundary_ignore_secs}s around transitions)")
         logger.log_epoch(epoch, {"train_loss": round(train_loss, 4), "train_acc": round(train_acc, 4),
                                   "val_loss": round(val_loss, 4), "val_acc": round(val_acc, 4),
                                   "edit_distance": extra["edit_distance"],
                                   "segmental_f1": extra["segmental_f1"],
+                                  "boundary_aware_acc": round(boundary_acc, 4),
+                                  "boundary_ignore_secs": args.boundary_ignore_secs,
                                   "per_class": per_class_metrics})
 
         if val_loss < best_val:

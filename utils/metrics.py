@@ -81,6 +81,32 @@ def confusion_matrix(pred: list, gt: list, num_classes: int):
     return matrix
 
 
+def boundary_mask(gt: list, ignore_secs: int = 0) -> list:
+    """
+    Returns a boolean mask where True = keep frame for evaluation.
+    Frames within ignore_secs of a phase transition are masked out.
+    Since features are at 1fps, ignore_secs == number of frames to ignore.
+    """
+    if ignore_secs == 0:
+        return [True] * len(gt)
+    keep = [True] * len(gt)
+    for i in range(1, len(gt)):
+        if gt[i] != gt[i - 1]:
+            for j in range(max(0, i - ignore_secs), min(len(gt), i + ignore_secs)):
+                keep[j] = False
+    return keep
+
+
+def apply_boundary_mask(pred: list, gt: list, ignore_secs: int):
+    """Filter pred and gt to exclude frames near phase boundaries."""
+    if ignore_secs == 0:
+        return pred, gt
+    mask = boundary_mask(gt, ignore_secs)
+    filtered_pred = [p for p, m in zip(pred, mask) if m]
+    filtered_gt = [g for g, m in zip(gt, mask) if m]
+    return filtered_pred, filtered_gt
+
+
 def _to_segments(labels: list) -> list:
     if not labels:
         return []
