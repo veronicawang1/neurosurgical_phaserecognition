@@ -6,6 +6,7 @@ from torch.utils.data import Dataset, DataLoader, random_split
 
 from models.cnn_backbone import FrameBackbone
 from utils.logger import RunLogger
+from utils.metrics import edit_distance, segmental_f1
 
 
 class FrameDataset(Dataset):
@@ -36,7 +37,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--features_dir", default="data/features")
     parser.add_argument("--labels_dir", default="data/labels")
-    parser.add_argument("--epochs", type=int, default=1)
+    parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--batch_size", type=int, default=64)
     parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--num_classes", type=int, default=4)
@@ -68,6 +69,7 @@ def main():
     best_val = float("inf")
 
     for epoch in range(1, args.epochs + 1):
+        logger.start_epoch()
         model.train()
         train_loss, correct, total = 0, 0, 0
         for feats, labels in train_loader:
@@ -83,6 +85,7 @@ def main():
 
         model.eval()
         val_loss, val_correct, val_total = 0, 0, 0
+        all_preds, all_gts = [], []
         with torch.no_grad():
             for feats, labels in val_loader:
                 feats, labels = feats.to(device), labels.to(device)
@@ -90,14 +93,24 @@ def main():
                 val_loss += F.cross_entropy(logits, labels).item()
                 val_correct += (logits.argmax(1) == labels).sum().item()
                 val_total += labels.size(0)
+                all_preds.extend(logits.argmax(1).cpu().tolist())
+                all_gts.extend(labels.cpu().tolist())
 
         tl = train_loss / len(train_loader)
         ta = correct / total
         vl = val_loss / len(val_loader)
         va = val_correct / val_total
+        ed = round(edit_distance(all_preds, all_gts), 4)
+        sf = segmental_f1(all_preds, all_gts)
+
         print(f"Epoch {epoch:03d} | train loss={tl:.4f} acc={ta:.3f} | val loss={vl:.4f} acc={va:.3f}")
-        logger.log_epoch(epoch, {"train_loss": round(tl, 4), "train_acc": round(ta, 4),
-                                  "val_loss": round(vl, 4), "val_acc": round(va, 4)})
+        print(f"    edit_dist={ed:.3f}  seg_f1@10={sf[0.1]:.3f}  seg_f1@25={sf[0.25]:.3f}  seg_f1@50={sf[0.5]:.3f}")
+
+        logger.log_epoch(epoch, {
+            "train_loss": round(tl, 4), "train_acc": round(ta, 4),
+            "val_loss": round(vl, 4), "val_acc": round(va, 4),
+            "edit_distance": ed, "segmental_f1": sf,
+        })
 
         if vl < best_val:
             best_val = vl

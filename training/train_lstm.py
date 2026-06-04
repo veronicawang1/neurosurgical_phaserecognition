@@ -102,7 +102,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--features_dir", default="data/features")
     parser.add_argument("--labels_dir", default="data/labels")
-    parser.add_argument("--epochs", type=int, default=30)
+    parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--batch_size", type=int, default=4)
     parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--num_classes", type=int, default=4)
@@ -152,6 +152,7 @@ def main():
     logger = RunLogger(args.log_dir, args.run_name, vars(args))
 
     for epoch in range(1, args.epochs + 1):
+        logger.start_epoch()
         train_loss, train_acc, _, __ = run_epoch(model, train_loader, optimizer, device, train=True,
                                                   class_weights=class_weights, num_classes=args.num_classes)
         val_loss, val_acc, per_class, extra = run_epoch(model, val_loader, optimizer, device, train=False,
