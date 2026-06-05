@@ -4,7 +4,8 @@ Run on VM from repo root:
     python3 analysis/tsne_comparison.py
 Outputs: analysis/figures/tsne_comparison.png
 """
-import os
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import glob
 import torch
 import numpy as np

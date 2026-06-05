@@ -4,8 +4,9 @@ Run on VM from repo root:
     python3 analysis/saliency_map.py --video data/raw_videos/<video>.mp4 --checkpoint checkpoints/finetuned_backbone.pt
 Outputs: analysis/figures/saliency_<phase>.png for each phase present in the video.
 """
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import argparse
-import os
 import cv2
 import numpy as np
 import torch
