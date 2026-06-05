@@ -5,6 +5,8 @@ Run on VM from repo root:
     python3 analysis/eval_confusion.py --model mstcn       --features_dir data/features_finetuned
 Outputs: analysis/figures/confusion_<model>.png
 """
+import sys, os
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import argparse
 import os
 import numpy as np
