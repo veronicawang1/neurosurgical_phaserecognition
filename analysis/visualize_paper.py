@@ -21,7 +21,8 @@ os.makedirs("analysis/figures", exist_ok=True)
 LOGS = "logs/"
 CSVS = "data/label_csvs/"
 
-CLASS_NAMES = ["Brain Exposure", "Parent Vessel ID", "Dome & Neck ID", "Clipping"]
+CLASS_NAMES = ["Brain Exposure", "Parent Vessel ID", "Dome and Neck ID", "Clipping"]
+CLASS_NAMES_DISPLAY = ["Brain Exposure", "Parent Vessel ID", "Dome & Neck ID", "Clipping"]
 CLASS_COLORS = ["#4C72B0", "#DD8452", "#55A868", "#C44E52"]
 
 LABEL_MAP = {
@@ -35,12 +36,12 @@ LABEL_MAP = {
 }
 
 plt.rcParams.update({
-    "font.size": 13,
-    "axes.titlesize": 15,
-    "axes.labelsize": 14,
-    "legend.fontsize": 12,
-    "xtick.labelsize": 12,
-    "ytick.labelsize": 12,
+    "font.size": 15,
+    "axes.titlesize": 17,
+    "axes.labelsize": 16,
+    "legend.fontsize": 13,
+    "xtick.labelsize": 14,
+    "ytick.labelsize": 14,
     "figure.dpi": 150,
 })
 
@@ -174,11 +175,11 @@ def fig_ablation():
     for bar in list(bars1) + list(bars2):
         h = bar.get_height()
         ax.text(bar.get_x() + bar.get_width()/2, h + 0.01, f"{h:.2f}",
-                ha="center", va="bottom", fontsize=8.5)
+                ha="center", va="bottom", fontsize=13)
 
     ax.set_xticks(x)
-    ax.set_xticklabels(labels, fontsize=9)
-    ax.set_ylim(0, 1.12)
+    ax.set_xticklabels(labels, fontsize=13)
+    ax.set_ylim(0, 1.18)
     ax.set_ylabel("Score")
     ax.set_title("Ablation: Contribution of Each Component")
     ax.legend()
@@ -187,7 +188,7 @@ def fig_ablation():
 
     # highlight the backbone switch
     ax.axvline(x=2.5, color="gray", linestyle="--", alpha=0.5)
-    ax.text(2.6, 1.08, "Fine-tuned\nbackbone →", fontsize=8, color="gray")
+    ax.text(2.6, 1.13, "Fine-tuned\nbackbone →", fontsize=11, color="gray")
 
     plt.tight_layout()
     plt.savefig("analysis/figures/fig3_ablation.png")
@@ -263,9 +264,9 @@ def fig_per_class():
     for ax, mat, title in zip(axes, [acc_matrix, f1_matrix], ["Per-class Accuracy", "Per-class F1"]):
         im = ax.imshow(mat, vmin=0, vmax=1, cmap="YlGn", aspect="auto")
         ax.set_xticks(range(len(CLASS_NAMES)))
-        ax.set_xticklabels(CLASS_NAMES, rotation=20, ha="right", fontsize=9)
+        ax.set_xticklabels(CLASS_NAMES_DISPLAY, rotation=20, ha="right", fontsize=9)
         ax.set_yticks(range(len(run_labels)))
-        ax.set_yticklabels(run_labels, fontsize=9)
+        ax.set_yticklabels(run_labels, fontsize=13)
         ax.set_title(title)
         for r in range(len(run_labels)):
             for c in range(len(CLASS_NAMES)):
@@ -380,7 +381,7 @@ def fig_phase_timeline():
     viterbi[82:87] = 2  # slight delay in transition
 
     fig, axes = plt.subplots(3, 1, figsize=(11, 4.5), sharex=True)
-    titles = ["Ground Truth", "Raw CNN predictions (no post-processing)", "After Viterbi decoding"]
+    titles = ["Ground Truth", "Raw CNN predictions\n(no post-processing)", "After Viterbi decoding"]
     preds  = [gt, raw, viterbi]
 
     for ax, pred, title in zip(axes, preds, titles):
