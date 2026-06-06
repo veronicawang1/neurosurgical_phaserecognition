@@ -35,12 +35,12 @@ LABEL_MAP = {
 }
 
 plt.rcParams.update({
-    "font.size": 11,
-    "axes.titlesize": 13,
-    "axes.labelsize": 12,
-    "legend.fontsize": 10,
-    "xtick.labelsize": 10,
-    "ytick.labelsize": 10,
+    "font.size": 13,
+    "axes.titlesize": 15,
+    "axes.labelsize": 14,
+    "legend.fontsize": 12,
+    "xtick.labelsize": 12,
+    "ytick.labelsize": 12,
     "figure.dpi": 150,
 })
 
@@ -109,13 +109,12 @@ def fig_learning_curves():
     ]
     linestyles = ["-", "-", "--", "--"]
 
-    fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
+    fig, axes = plt.subplots(2, 1, figsize=(8, 9))
 
     for (label, fname, color), ls in zip(runs, linestyles):
         log = load_log(LOGS + fname)
         epochs_data = log["epochs"]
         xs = [e["epoch"] for e in epochs_data]
-        train_loss = [e["train_loss"] for e in epochs_data]
         val_loss = [e["val_loss"] for e in epochs_data]
         val_acc = [e["val_acc"] for e in epochs_data]
 
@@ -134,7 +133,7 @@ def fig_learning_curves():
 
     # annotate the gap
     axes[1].axhline(y=0.53, color="gray", linestyle=":", alpha=0.5, linewidth=1)
-    axes[1].text(102, 0.54, "Frozen\npeak", fontsize=8, color="gray")
+    axes[1].text(2, 0.54, "Frozen peak", fontsize=9, color="gray")
 
     plt.suptitle("Fine-tuned vs. Frozen CNN Features: Training Dynamics", fontsize=13, y=1.01)
     plt.tight_layout()
@@ -205,7 +204,7 @@ def fig_postprocessing():
         ("Transformer (fine-tuned)", "transformer_finetuned_v1_20260605_002920.json"),
     ]
     thresholds = ["0.1", "0.25", "0.5"]
-    fig, axes = plt.subplots(1, 2, figsize=(12, 4.5), sharey=True)
+    fig, axes = plt.subplots(2, 1, figsize=(7, 10), sharex=True)
 
     for ax, (label, fname) in zip(axes, runs):
         log = load_log(LOGS + fname)
@@ -226,10 +225,9 @@ def fig_postprocessing():
         ax.set_title(label)
         ax.set_ylim(0, 1.05)
         ax.legend()
+        ax.set_ylabel("Segmental F1 Score")
         ax.spines["top"].set_visible(False)
         ax.spines["right"].set_visible(False)
-
-    axes[0].set_ylabel("Segmental F1 Score")
     plt.suptitle("Effect of Post-processing on Segmental F1", fontsize=13)
     plt.tight_layout()
     plt.savefig("analysis/figures/fig4_postprocessing.png")
@@ -261,7 +259,7 @@ def fig_per_class():
             acc_matrix[i, j] = vals.get("acc") or 0
             f1_matrix[i, j]  = vals.get("f1")  or 0
 
-    fig, axes = plt.subplots(1, 2, figsize=(12, 3.5))
+    fig, axes = plt.subplots(2, 1, figsize=(9, 7))
     for ax, mat, title in zip(axes, [acc_matrix, f1_matrix], ["Per-class Accuracy", "Per-class F1"]):
         im = ax.imshow(mat, vmin=0, vmax=1, cmap="YlGn", aspect="auto")
         ax.set_xticks(range(len(CLASS_NAMES)))
@@ -323,7 +321,7 @@ def fig_val_split():
     frame_log  = load_log(LOGS + "transformer_framelevel_20260604_223338.json")  # frame split
     video_log  = load_log(LOGS + "transformer_framelevel_v3_20260604_232301.json")  # video split
 
-    fig, axes = plt.subplots(1, 2, figsize=(11, 4))
+    fig, axes = plt.subplots(2, 1, figsize=(8, 9))
 
     for ax, log, label, color in zip(
         axes,
@@ -467,7 +465,7 @@ def fig_finetuned_curves():
         ("Transformer (fine-tuned)",  "transformer_finetuned_v1_20260605_002920.json",  "#DD8452"),
     ]
 
-    fig, axes = plt.subplots(1, 3, figsize=(15, 4.5))
+    fig, axes = plt.subplots(3, 1, figsize=(8, 13))
 
     for label, fname, color in runs:
         log = load_log(LOGS + fname)
@@ -516,7 +514,7 @@ def fig_confusion_estimated():
         ("MS-TCN\n(fine-tuned)", "mstcn_finetuned_v1_20260605_002858.json"),
         ("Transformer\n(fine-tuned)", "transformer_finetuned_v1_20260605_002920.json"),
     ]
-    fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
+    fig, axes = plt.subplots(2, 1, figsize=(8, 9))
 
     for ax, (label, fname) in zip(axes, runs):
         log = load_log(LOGS + fname)
@@ -565,6 +563,62 @@ def fig_confusion_estimated():
     print("Saved fig11_confusion_estimated.png  (approximate — run eval_confusion.py for exact)")
 
 
+# ─────────────────────────────────────────────
+# Fig 12: Fine-tuned models — train vs val loss (video split)
+# ─────────────────────────────────────────────
+def fig_combined_loss():
+    """Combines frozen (frame/video split) and fine-tuned (MS-TCN/Transformer) into one 4-panel figure."""
+    frozen_runs = [
+        ("Frame split (leaky)",  "transformer_framelevel_20260604_223338.json",  "#DD8452"),
+        ("Video split (honest)", "transformer_framelevel_v3_20260604_232301.json","#4C72B0"),
+    ]
+    finetuned_runs = [
+        ("MS-TCN",      "mstcn_finetuned_v1_20260605_002858.json",      "#4C72B0"),
+        ("Transformer", "transformer_finetuned_v1_20260605_002920.json", "#DD8452"),
+    ]
+
+    fig, axes = plt.subplots(2, 2, figsize=(11, 8))
+    plt.subplots_adjust(hspace=0.55, top=0.88)
+
+    def plot_panel(ax, fname, color, subtitle, show_floor=False):
+        log = load_log(LOGS + fname)
+        ep  = log["epochs"]
+        xs    = [e["epoch"]      for e in ep]
+        train = [e["train_loss"] for e in ep]
+        val   = [e["val_loss"]   for e in ep]
+        best_val = min(val)
+        best_ep  = val.index(best_val) + 1
+        ax.plot(xs, train, color=color, linestyle="--", alpha=0.55, linewidth=1.4, label="Train")
+        ax.plot(xs, val,   color=color, linestyle="-",  linewidth=2,               label="Val")
+        ax.axvline(x=best_ep, color="gray", linestyle=":", alpha=0.6)
+        if show_floor:
+            ax.axhline(y=0.349, color="gray", linestyle=":", alpha=0.45, linewidth=1)
+            ax.text(2, 0.31, "floor", fontsize=7, color="gray")
+        ax.set_title(f"{subtitle}  —  best val {best_val:.3f} @ ep {best_ep}", fontsize=10)
+        ax.set_xlabel("Epoch", fontsize=9)
+        ax.set_ylabel("Cross-entropy loss", fontsize=9)
+        ax.legend(fontsize=8)
+        ax.spines["top"].set_visible(False)
+        ax.spines["right"].set_visible(False)
+
+    for ax, (label, fname, color) in zip(axes[0], frozen_runs):
+        plot_panel(ax, fname, color, label)
+
+    for ax, (label, fname, color) in zip(axes[1], finetuned_runs):
+        plot_panel(ax, fname, color, label, show_floor=True)
+
+    # bold all-caps section headers
+    fig.text(0.5, 0.95, "FROZEN", ha="center", fontsize=13,
+             fontweight="bold", transform=fig.transFigure)
+    fig.text(0.5, 0.48, "FINE-TUNED", ha="center", fontsize=13,
+             fontweight="bold", transform=fig.transFigure)
+
+
+    plt.savefig("analysis/figures/fig_combined_loss.png", bbox_inches="tight")
+    plt.close()
+    print("Saved fig_combined_loss.png")
+
+
 if __name__ == "__main__":
     print("Generating paper figures...")
     fig_class_distribution()
@@ -578,5 +632,6 @@ if __name__ == "__main__":
     fig_model_comparison()
     fig_finetuned_curves()
     fig_confusion_estimated()
+    fig_combined_loss()
     print("\nAll figures saved to analysis/figures/")
     print("For exact confusion matrix, saliency maps, and t-SNE: run scripts in analysis/ on the VM.")

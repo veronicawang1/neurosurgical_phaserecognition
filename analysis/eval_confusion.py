@@ -16,6 +16,16 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
+plt.rcParams.update({
+    "font.size": 13,
+    "axes.titlesize": 15,
+    "axes.labelsize": 14,
+    "legend.fontsize": 12,
+    "xtick.labelsize": 12,
+    "ytick.labelsize": 12,
+    "figure.dpi": 150,
+})
+
 from data.dataset import FeatureDataset, collate_variable_length
 from data.splits import build_samples, train_val_split
 from models.opera_transformer import NeuroOperA
