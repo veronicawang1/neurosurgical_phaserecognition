@@ -19,6 +19,16 @@ import matplotlib.cm as cm
 
 from models.cnn_backbone import FrameBackbone
 
+plt.rcParams.update({
+    "font.size": 13,
+    "axes.titlesize": 15,
+    "axes.labelsize": 14,
+    "legend.fontsize": 12,
+    "xtick.labelsize": 12,
+    "ytick.labelsize": 12,
+    "figure.dpi": 150,
+})
+
 os.makedirs("analysis/figures", exist_ok=True)
 
 CLASS_NAMES  = ["Brain Exposure", "Parent Vessel ID", "Dome & Neck ID", "Clipping"]

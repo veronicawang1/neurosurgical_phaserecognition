@@ -74,7 +74,9 @@ Raw frame-level predictions often exhibit temporal inconsistencies—brief flick
 
 \subsection{Feature Extraction}
 
-We use ResNet50 \cite{he2016resnet} pre-trained on ImageNet \cite{deng2009imagenet} as our visual backbone. The final classification head is replaced with a 4-class linear layer, and the entire network is fine-tuned on labeled surgical frames. The penultimate 2048-dimensional layer activations are extracted as frame features. All videos are processed at 1 FPS; each frame is resized to $224 \times 224$ and normalized with ImageNet statistics.
+We use ResNet50 \cite{he2016resnet} pre-trained on ImageNet \cite{deng2009imagenet} as our visual backbone. The penultimate 2048-dimensional layer activations are extracted as frame features for all temporal models. All videos are processed at 1 FPS; each frame is resized to $224 \times 224$ and normalized with ImageNet statistics.
+
+We evaluate two feature regimes as an ablation. In the \emph{frozen} regime, ResNet50 weights are kept fixed at their ImageNet-pretrained values, so features encode generic visual structure rather than surgical semantics. In the \emph{fine-tuned} regime, the final classification head is replaced with a 4-class linear layer and the entire network is trained end-to-end on labeled surgical frames before feature extraction. All temporal models are trained and evaluated under both regimes to isolate the contribution of task-specific visual representations.
 
 Formally, let $v_t \in \mathbb{R}^{H \times W \times 3}$ denote the frame at time $t$. The backbone $f_\theta$ maps each frame to a feature vector:
 \[
@@ -161,7 +163,7 @@ Videos are downsampled to 1 FPS. Each frame is resized to $224 \times 224$ pixel
 
 \subsection{Train/Validation Split}
 
-We use a \emph{video-level} 80/20 split: approximately 38 videos for training and 10 for validation. This prevents data leakage, since frame-level splits would allow overlapping video context between train and validation windows. We demonstrate empirically (Section~\ref{sec:experiments}) that frame-level splits yield misleadingly optimistic validation metrics.
+We use a \emph{video-level} 80/20 split: approximately 38 videos are designated for training and 10 for validation, ensuring no video contributes frames to both sets. Training samples fixed-length frame windows from the training videos, while validation evaluates each held-out video as a complete sequence. This hybrid approach gives the temporal models diverse training windows while ensuring validation reflects real inference conditions on unseen videos. We demonstrate empirically (Section~\ref{sec:experiments}) that a purely frame-level split—where windows from the same video can appear in both train and val—yields misleadingly optimistic validation metrics due to context leakage.
 
 % ─────────────────────────────────────────────
 \section{Experiments, Results, and Discussion}

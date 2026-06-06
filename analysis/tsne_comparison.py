@@ -17,6 +17,16 @@ from sklearn.manifold import TSNE
 
 os.makedirs("analysis/figures", exist_ok=True)
 
+plt.rcParams.update({
+    "font.size": 13,
+    "axes.titlesize": 15,
+    "axes.labelsize": 14,
+    "legend.fontsize": 12,
+    "xtick.labelsize": 12,
+    "ytick.labelsize": 12,
+    "figure.dpi": 150,
+})
+
 CLASS_NAMES  = ["Brain Exposure", "Parent Vessel ID", "Dome & Neck ID", "Clipping"]
 CLASS_COLORS = ["#4C72B0", "#DD8452", "#55A868", "#C44E52"]
 
@@ -64,7 +74,7 @@ tsne_frozen    = TSNE(n_components=2, perplexity=40, random_state=42, **_tsne_kw
 print("Running t-SNE on fine-tuned features...")
 tsne_finetuned = TSNE(n_components=2, perplexity=40, random_state=42, **_tsne_kwargs).fit_transform(f_finetuned)
 
-fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+fig, axes = plt.subplots(2, 1, figsize=(7, 12))
 for ax, embed, labels, title in zip(
     axes,
     [tsne_frozen, tsne_finetuned],
